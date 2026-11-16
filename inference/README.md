@@ -19,7 +19,8 @@ Quijote N-body "truth" catalogs). Galaxy noise = 0.0 everywhere.
 | HOD × cosmology LH table | `gen_lh_hod_ext_40000.py` | — | `LH_points_HOD_cosmo_ext_40000.txt` |
 | Pk + Bk/Qk, mock catalogs (LH 0–3999) | `gal_pk_bk_ext_40000_mock.py` | `run_pk_bk_mock_40000.slurm` | `wide_hod_ext_40000/{Pk,Bk}_all_noise/*_mock_LH_{i}.dill` |
 | Pk + Bk/Qk, truth catalogs (test sims) | `gal_pk_bk_ext_40000_truth.py` | `run_pk_bk_truth_40000.slurm` | `wide_hod_ext_40000/{Pk,Bk}_all_noise/*_truth_LH_{i}.dill` |
-| RSD galaxy positions, mock LH 2000–3999 | `gal_pos_ext_40000_mock.py` | `run_gal_pos_mock_40000.slurm` | `wide_hod_ext_40000/galaxy_rsd_pos_noise/` |
+| RSD galaxy positions, mock LH 0–3999 | `gal_pos_ext_40000_mock.py` | `run_gal_pos_mock_40000.slurm` (args `2000 4000`; rerun with `0 2000` for LH 0–1999) | `wide_hod_ext_40000/galaxy_rsd_pos_noise/*_mock_LH_{i}.dill` |
+| RSD galaxy positions, truth (test sims) | `gal_pos_ext_40000_truth.py` | `run_gal_pos_truth_40000.slurm` | `wide_hod_ext_40000/galaxy_rsd_pos_noise/*_truth_LH_{i}.dill` |
 
 The WST coefficients (`WST_angular_NGP_kc34pi_*`) are computed on DeltaAI
 from the galaxy positions; that code is not in this repo.
@@ -46,7 +47,14 @@ column-wise.
 > 19000/39000 train rows (all of isim < 2000) and in 1000/1000 test rows.
 > Pk/Qk rows match exactly. So for those rows the Pk+Qk and WST parts of the
 > combined vector come from different HOD draws at the same cosmology. LH
-> 2000–3999 rows are consistent.
+> 2000–3999 rows are consistent. The WST rows for isim < 2000 came from
+> `LH_points_HOD_cosmo_ext_20000.txt`.
+>
+> Fix in progress: mock positions for LH 0–1999 and truth positions for the
+> test sims have been regenerated with the 40000 HOD table
+> (`gal_pos_ext_40000_{mock,truth}.py`). After their WST is computed on
+> DeltaAI, `prepare_wst_train_test_40000.py` must read those files for
+> isim < 2000 and the row-2 SBI must be rerun.
 
 ## 3. `sbi/` — run the SBI pipeline
 
