@@ -15,6 +15,14 @@
 # Example:
 #   bash submit_pkqkwst_ilias_range.sh 0.6 0.0 0.15 0.45 0.65 0.95
 #   bash submit_pkqkwst_ilias_range.sh 0.6 0.0 0.15 0.45 0.65 0.95 bk 256 1
+#   bash submit_pkqkwst_ilias_range.sh 0.6 0.0 full          # full prior, no box
+#   MODEL_SUFFIX=_hodfix bash submit_pkqkwst_ilias_range.sh 0.6 0.0 full
+#
+# om_lo = "full" drops the box restriction (the remaining range args are then
+# not needed; bq/grid/average_angles shift to positions 4-6).
+# MODEL_SUFFIX (env, default empty) is appended to the run directory name so a
+# rerun does not reuse an existing directory (preprocess skips if x_train.npy
+# already exists).
 #
 # Pipeline:
 #   Job 1 – preprocess  (single task)
@@ -31,12 +39,22 @@ USAGE="Usage: bash submit_pkqkwst_ilias_range.sh <kmax> <noise> <om_lo> <om_hi> 
 KMAX=${1:?$USAGE}
 NOISE=${2:?$USAGE}
 OM_LO=${3:?$USAGE}
-OM_HI=${4:?$USAGE}
-S8_LO=${5:?$USAGE}
-S8_HI=${6:?$USAGE}
-BQ=${7:-qk}
-GRID=${8:-256}
-AVG_ANGLES=${9:-1}   # 1 = on (default), 0 = off
+if [ "$OM_LO" = "full" ]; then
+    FULL_RANGE=1
+    OM_HI=""; S8_LO=""; S8_HI=""
+    BQ=${4:-qk}
+    GRID=${5:-256}
+    AVG_ANGLES=${6:-1}
+else
+    FULL_RANGE=0
+    OM_HI=${4:?$USAGE}
+    S8_LO=${5:?$USAGE}
+    S8_HI=${6:?$USAGE}
+    BQ=${7:-qk}
+    GRID=${8:-256}
+    AVG_ANGLES=${9:-1}   # 1 = on (default), 0 = off
+fi
+MODEL_SUFFIX=${MODEL_SUFFIX:-}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_SCRIPT="$SCRIPT_DIR/run_inference_pkqkwst_ilias_range.py"
@@ -51,8 +69,14 @@ else
     AVG_TAG=""
     AVG_FLAG="--no-average_angles"
 fi
-RANGE_TAG="_Om${OM_LO}-${OM_HI}_s8${S8_LO}-${S8_HI}"
-MODEL_DIR="/u/yzhang116/NN/inference/all_test/ilias_runs/${BQ}_kmax${KMAX}_wstgrid${GRID}${AVG_TAG}_noise${NOISE}${RANGE_TAG}"
+if [ "$FULL_RANGE" = "1" ]; then
+    RANGE_TAG="_fullrange"
+    RANGE_FLAGS=""
+else
+    RANGE_TAG="_Om${OM_LO}-${OM_HI}_s8${S8_LO}-${S8_HI}"
+    RANGE_FLAGS="--om_range $OM_LO $OM_HI --sigma8_range $S8_LO $S8_HI"
+fi
+MODEL_DIR="/u/yzhang116/NN/inference/all_test/ilias_runs/${BQ}_kmax${KMAX}_wstgrid${GRID}${AVG_TAG}_noise${NOISE}${RANGE_TAG}${MODEL_SUFFIX}"
 
 N_ARRAYS=40
 TRIALS_PER_WORKER=5   # 40 × 5 = 200 total trials
@@ -86,13 +110,12 @@ PYTHON_COMMON="python $PYTHON_SCRIPT $KMAX $NOISE \
     --bq $BQ \
     --grid $GRID \
     $AVG_FLAG \
-    --om_range $OM_LO $OM_HI \
-    --sigma8_range $S8_LO $S8_HI \
+    $RANGE_FLAGS \
     --model_dir $MODEL_DIR \
     --n_top_nets $N_TOP_NETS \
     --backend $BACKEND"
 
-JOB_TAG="kmax${KMAX}_noise${NOISE}${RANGE_TAG}"
+JOB_TAG="kmax${KMAX}_noise${NOISE}${RANGE_TAG}${MODEL_SUFFIX}"
 
 # ── Job 1: preprocess ─────────────────────────────────────────────────────────
 JID1=$(sbatch --parsable <<EOF

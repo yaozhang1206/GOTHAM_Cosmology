@@ -35,7 +35,8 @@ baked into the saved posterior_samples.npy, so nothing extra is needed here.
 
 Usage
 -----
-    python plot_validation_pkqk_full_vs_pkqkwst_box.py [--no-tarp] [--out fig.pdf]
+    python plot_validation_pkqk_full_vs_pkqkwst_box.py [--row2 box_hodfix|fullrange_hodfix|box_orig]
+                                                       [--no-tarp] [--out fig.pdf]
 """
 
 import argparse
@@ -105,18 +106,31 @@ SAVE_DIR = os.path.dirname(os.path.abspath(__file__))
 KMAX  = "0.6"
 INFER_ROOT = "/u/yzhang116/NN/inference"
 
-# Row 1 spans the full prior; row 2 only the restricted box.
-STATISTICS = [
-    ("Pk+Qk (full range)",
-     rf"$P_\ell(k_{{\rm max}}={KMAX})+Q_0$, trained on the full prior range",
-     join(INFER_ROOT, "bk_test", "ilias_runs",
-          "qk_kmax0.6_noise0.0_ext_200c_40000")),
-    ("Pk+Qk+WST (box)",
-     rf"$P_\ell(k_{{\rm max}}={KMAX})+Q_0+{{\rm WST}}$, trained on "
-     r"$\Omega_\mathrm{m}\in[0.15,0.45]$, $\sigma_8\in[0.65,0.95]$",
-     join(INFER_ROOT, "all_test", "ilias_runs",
-          "qk_kmax0.6_wstgrid256_avgangles_noise0.0_Om0.15-0.45_s80.65-0.95")),
-]
+# Row 1 is always Pk+Qk over the full prior.
+ROW1 = ("Pk+Qk (full range)",
+        rf"$P_\ell(k_{{\rm max}}={KMAX})+Q_0$, trained on the full prior range",
+        join(INFER_ROOT, "bk_test", "ilias_runs",
+             "qk_kmax0.6_noise0.0_ext_200c_40000"))
+
+_WST_RUNS = join(INFER_ROOT, "all_test", "ilias_runs")
+_BOX_LABEL = (rf"$P_\ell(k_{{\rm max}}={KMAX})+Q_0+{{\rm WST}}$, trained on "
+              r"$\Omega_\mathrm{m}\in[0.15,0.45]$, $\sigma_8\in[0.65,0.95]$")
+_FULL_LABEL = (rf"$P_\ell(k_{{\rm max}}={KMAX})+Q_0+{{\rm WST}}$, "
+               "trained on the full prior range")
+# Row 2 choices (--row2). "box_orig" is the run behind the original Fig. 7,
+# whose WST for LH 0-1999 used a different HOD draw than Pk/Qk; the *_hodfix
+# runs use WST recomputed with the 40000 HOD table (row-aligned with Pk/Qk).
+ROW2_CHOICES = {
+    "box_orig": ("Pk+Qk+WST (box, original)", _BOX_LABEL,
+                 join(_WST_RUNS, "qk_kmax0.6_wstgrid256_avgangles_noise0.0_Om0.15-0.45_s80.65-0.95"),
+                 "validation_pkqk_full_vs_pkqkwst_box.pdf"),
+    "box_hodfix": ("Pk+Qk+WST (box, HOD fixed)", _BOX_LABEL,
+                   join(_WST_RUNS, "qk_kmax0.6_wstgrid256_avgangles_noise0.0_Om0.15-0.45_s80.65-0.95_hodfix"),
+                   "validation_pkqk_full_vs_pkqkwst_box_hodfix.pdf"),
+    "fullrange_hodfix": ("Pk+Qk+WST (full range, HOD fixed)", _FULL_LABEL,
+                         join(_WST_RUNS, "qk_kmax0.6_wstgrid256_avgangles_noise0.0_fullrange_hodfix"),
+                         "validation_pkqk_full_vs_pkqkwst_fullrange_hodfix.pdf"),
+}
 
 
 # ── Compute predictions ───────────────────────────────────────────────────────
@@ -475,10 +489,11 @@ if __name__ == "__main__":
                     "box-trained Pk+Qk+WST (row 2).",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument("--row2", choices=sorted(ROW2_CHOICES), default="box_hodfix",
+                        help="Which Pk+Qk+WST run goes in row 2.")
     parser.add_argument("--out", default=None,
                         help="Output path (.pdf; a .png twin is also saved). "
-                             f"Default: {SAVE_DIR}/"
-                             "validation_pkqk_full_vs_pkqkwst_box.pdf")
+                             f"Default: {SAVE_DIR}/<file name set by --row2>")
     parser.add_argument("--tarp", dest="tarp", action="store_true", default=True,
                         help="Include the TARP panel (default: on).")
     parser.add_argument("--no-tarp", dest="tarp", action="store_false",
@@ -492,7 +507,8 @@ if __name__ == "__main__":
 
     row_labels = []
     datasets = []
-    for key, label, model_dir in STATISTICS:
+    key2, label2, dir2, default_name = ROW2_CHOICES[args.row2]
+    for key, label, model_dir in (ROW1, (key2, label2, dir2)):
         if not os.path.isdir(model_dir):
             raise FileNotFoundError(f"{key}: model dir not found: {model_dir}")
         print(f"── {key}  {model_dir}")
@@ -500,6 +516,6 @@ if __name__ == "__main__":
                                      n_samples_cap=args.n_samples_cap))
         row_labels.append(label)
 
-    out_path = args.out or join(SAVE_DIR, "validation_pkqk_full_vs_pkqkwst_box.pdf")
+    out_path = args.out or join(SAVE_DIR, default_name)
 
     make_figure(datasets, out_path, include_tarp=args.tarp, row_labels=row_labels)

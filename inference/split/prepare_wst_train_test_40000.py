@@ -2,8 +2,14 @@
 Prepare WST train/test data spanning the full 4000-sim extended-HOD set (grid=256 only).
 
 Source data lives in two directories depending on isim:
-  isim 0-1999:    wide_hod_ext/WST_all_noise/       (single file has mock+truth, grid 192+256)
-  isim 2000-3999: wide_hod_ext_40000/WST_all_noise/  (single file has mock only, grid 256 only)
+  isim 0-1999:    /u/yzhang116/NN/inference/wide_hod_ext/WST_all_noise/
+                  separate mock and truth files, WST computed (on DeltaAI) from
+                  the positions of gal_pos_ext_40000_{mock,truth}.py, i.e. the
+                  same LH_points_HOD_cosmo_ext_40000.txt HOD draws as Pk/Bk.
+  isim 2000-3999: wide_hod_ext_40000/WST_all_noise/  (mock only, grid 256 only)
+
+(The earlier isim 0-1999 files held mock+truth in one file and were painted
+with LH_points_HOD_cosmo_ext_20000.txt, so their HOD did not match Pk/Bk.)
 
 Train (isim NOT in saved_idx): mock WST only.
 Test  (isim in saved_idx):     mock WST + truth WST.
@@ -19,7 +25,7 @@ import sys
 
 noise = float(sys.argv[1]) if len(sys.argv) > 1 else 0.0
 
-ldir_stats_low  = '/work/hdd/bdne/yzhang116/quijote_galaxy/wide_hod_ext/WST_all_noise/'
+ldir_stats_low  = '/u/yzhang116/NN/inference/wide_hod_ext/WST_all_noise/'
 ldir_stats_high = '/work/hdd/bdne/yzhang116/quijote_galaxy/wide_hod_ext_40000/WST_all_noise/'
 pos = 'rsd'
 
@@ -41,14 +47,16 @@ nbar_test_mock = []
 nbar_test_truth = []
 
 for isim in range(nsim):
-    if isim < 2000:
-        fname = ldir_stats_low + f'WST_{model}_NGP_kc34pi_galnoise_{noise:.2f}_galaxy_LH_{isim}.dill'
-    else:
-        fname = ldir_stats_high + f'WST_{model}_NGP_kc34pi_galnoise_{noise:.2f}_mock_galaxy_LH_{isim}.dill'
+    ldir = ldir_stats_low if isim < 2000 else ldir_stats_high
+    fname = ldir + f'WST_{model}_NGP_kc34pi_galnoise_{noise:.2f}_mock_galaxy_LH_{isim}.dill'
 
     try:
         saved_j = dill.load(open(fname, 'rb'))
         is_test = isim in saved_idx
+        if is_test:
+            # truth WST is in its own file (test sims are all isim < 2000)
+            fname_t = ldir + f'WST_{model}_NGP_kc34pi_galnoise_{noise:.2f}_truth_galaxy_LH_{isim}.dill'
+            saved_j = {**saved_j, **dill.load(open(fname_t, 'rb'))}
 
         for ihod in range(nhod_LH_samp):
             mock = np.concatenate([
