@@ -3,13 +3,11 @@ Prepare WST train/test data spanning the full 4000-sim extended-HOD set (grid=25
 
 Source data lives in two directories depending on isim:
   isim 0-1999:    /u/yzhang116/NN/inference/wide_hod_ext/WST_all_noise/
-                  separate mock and truth files, WST computed (on DeltaAI) from
-                  the positions of gal_pos_ext_40000_{mock,truth}.py, i.e. the
-                  same LH_points_HOD_cosmo_ext_40000.txt HOD draws as Pk/Bk.
+                  separate mock and truth files
   isim 2000-3999: wide_hod_ext_40000/WST_all_noise/  (mock only, grid 256 only)
-
-(The earlier isim 0-1999 files held mock+truth in one file and were painted
-with LH_points_HOD_cosmo_ext_20000.txt, so their HOD did not match Pk/Bk.)
+All WST is computed (on DeltaAI) from the positions written by
+gal_pos_ext_40000_{mock,truth}.py, i.e. the same LH_points_HOD_cosmo_ext_40000.txt
+HOD draws as the Pk/Bk statistics.
 
 Train (isim NOT in saved_idx): mock WST only.
 Test  (isim in saved_idx):     mock WST + truth WST.

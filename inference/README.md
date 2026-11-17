@@ -41,26 +41,6 @@ column-wise.
 | `prepare_pk_40000.py [noise]` | `Pk_nbar_NGP_galnoise_{noise}_200c_{train,test}.dill` |
 | `prepare_bk_40000.py [noise]` | `Bk_NGP_galnoise_{noise}_200c_{train,test}.dill` |
 | `prepare_wst_train_test_40000.py [noise]` | `WST_nbar_angular_NGP_kc34pi_40000_galnoise_{noise}_{train,test}.dill` |
-| `prepare_wst_train_test_40000_hodfix.py [noise]` (`run_prepare_wst_hodfix.slurm`) | same files; the version actually run on 2026-11-16 (see below) |
-
-> **Fixed (2026-11-16): HOD mismatch between Pk/Qk and WST for LH 0–1999.**
-> The WST per-LH files for isim < 2000 had been painted with
-> `LH_points_HOD_cosmo_ext_20000.txt`, so in the original splits the WST rows
-> for isim < 2000 (19000/39000 train rows, all 1000 test rows) used different
-> HOD parameters (theta columns 6–15) from the Pk/Qk rows at the same
-> cosmology. Mock positions for LH 0–1999 and truth positions for the test
-> sims were regenerated with the 40000 HOD table
-> (`gal_pos_ext_40000_{mock,truth}.py`), their WST recomputed on DeltaAI, and
-> the WST splits rebuilt.
->
-> `prepare_wst_train_test_40000.py` now reads that layout. The split actually
-> used was built by `prepare_wst_train_test_40000_hodfix.py`, which takes the
-> isim ≥ 2000 rows from the previous split (their per-LH files had been
-> removed; those rows already matched), checks theta against the Pk and Bk
-> splits (cosmology and HOD equal in 39000/39000 train and 1000/1000 test
-> rows; nbar identical) and only then writes the files, keeping the old ones
-> as `*.pre_hodfix.dill`. The row-2 runs were rerun into `*_hodfix`
-> directories.
 
 ## 3. `sbi/` — run the SBI pipeline
 
@@ -86,14 +66,13 @@ Requires the `nn` conda env and ilias at `/u/yzhang116/ilias`.
 ## 4. `plot/` — the figures
 
 ```bash
-# Fig. 7 (row 2 = box run with the HOD fix; default)
-python plot/plot_validation_pkqk_full_vs_pkqkwst_box.py --row2 box_hodfix
-# alternative row 2: full-prior Pk+Q0+WST, or the original (pre-fix) box run
-python plot/plot_validation_pkqk_full_vs_pkqkwst_box.py --row2 fullrange_hodfix
-python plot/plot_validation_pkqk_full_vs_pkqkwst_box.py --row2 box_orig
+# Fig. 7 (row 2 = box run; default)
+python plot/plot_validation_pkqk_full_vs_pkqkwst_box.py --row2 box
+# alternative row 2: Pk+Q0+WST trained on the full prior
+python plot/plot_validation_pkqk_full_vs_pkqkwst_box.py --row2 fullrange
 
 # Fig. 8: posterior std vs true Om / sigma8 on the box test set
-python plot/errorbar_pkqk_wst_restricted_range.py --wst_suffix _hodfix
+python plot/errorbar_pkqk_wst_restricted_range.py
 ```
 
 Fig. 8 also needs the full-range P_ℓ (k_max = 0.3–0.6) and P_ℓ+Q₀ ensembles

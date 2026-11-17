@@ -45,7 +45,7 @@ replicated here.
 
 Usage
 -----
-    python errorbar_pkqk_wst_restricted_range.py [--wst_suffix _hodfix] [--out fig.png] [--n_bins 4]
+    python errorbar_pkqk_wst_restricted_range.py [--out fig.png] [--n_bins 4]
 """
 
 import argparse
@@ -117,10 +117,7 @@ PKQK_RUN_DIR = (join(INFER_ROOT, "bk_test", "ilias_runs",
                      f"{BQ}_kmax0.6_noise{NOISE}_ext_200c_40000"), BOX_VDIR)
 # Restricted-range-trained pk+qk+WST run: its ordinary validation_quijote IS
 # the box test set.
-# --wst_suffix selects the run: "" = original run (WST for LH 0-1999 from a
-# different HOD draw than Pk/Qk), "_hodfix" = rerun with WST recomputed on the
-# 40000 HOD table so all three statistics share the same galaxy catalogues.
-def pkqkwst_run_dir(suffix=""):
+def pkqkwst_run_dir(suffix="_hodfix"):
     return (join(INFER_ROOT, "all_test", "ilias_runs",
                  f"{BQ}_kmax0.6_wstgrid{GRID}_avgangles_noise{NOISE}{BOX_TAG}{suffix}"),
             "validation_quijote")
@@ -302,15 +299,14 @@ def main():
     )
     parser.add_argument("--n_bins", type=int, default=4,
                         help="Number of bins to split each parameter's box range into.")
-    parser.add_argument("--wst_suffix", default="",
-                        help="Run-directory suffix of the pk+qk+WST box run "
-                             "(e.g. _hodfix). Also appended to the default output name.")
+    parser.add_argument("--wst_suffix", default="_hodfix",
+                        help="Run-directory suffix of the pk+qk+WST box run.")
     parser.add_argument("--out", default=None,
                         help="Output figure path (default: "
                              "errorbar_pkqk_wst_restricted_range<box><wst_suffix>.png here)")
     args = parser.parse_args()
     if args.out is None:
-        args.out = join(SAVE_DIR, f"errorbar_pkqk_wst_restricted_range{BOX_TAG}{args.wst_suffix}.png")
+        args.out = join(SAVE_DIR, f"errorbar_pkqk_wst_restricted_range{BOX_TAG}.png")
 
     om_bins = list(np.linspace(float(OM_RANGE[0]), float(OM_RANGE[1]), args.n_bins + 1))
     s8_bins = list(np.linspace(float(SIGMA8_RANGE[0]), float(SIGMA8_RANGE[1]), args.n_bins + 1))

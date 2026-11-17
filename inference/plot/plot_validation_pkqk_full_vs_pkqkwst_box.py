@@ -35,7 +35,7 @@ baked into the saved posterior_samples.npy, so nothing extra is needed here.
 
 Usage
 -----
-    python plot_validation_pkqk_full_vs_pkqkwst_box.py [--row2 box_hodfix|fullrange_hodfix|box_orig]
+    python plot_validation_pkqk_full_vs_pkqkwst_box.py [--row2 box|fullrange]
                                                        [--no-tarp] [--out fig.pdf]
 """
 
@@ -117,19 +117,15 @@ _BOX_LABEL = (rf"$P_\ell(k_{{\rm max}}={KMAX})+Q_0+{{\rm WST}}$, trained on "
               r"$\Omega_\mathrm{m}\in[0.15,0.45]$, $\sigma_8\in[0.65,0.95]$")
 _FULL_LABEL = (rf"$P_\ell(k_{{\rm max}}={KMAX})+Q_0+{{\rm WST}}$, "
                "trained on the full prior range")
-# Row 2 choices (--row2). "box_orig" is the run behind the original Fig. 7,
-# whose WST for LH 0-1999 used a different HOD draw than Pk/Qk; the *_hodfix
-# runs use WST recomputed with the 40000 HOD table (row-aligned with Pk/Qk).
+# Row 2 choices (--row2): Pk+Qk+WST trained on the box (paper Fig. 7) or on
+# the full prior.
 ROW2_CHOICES = {
-    "box_orig": ("Pk+Qk+WST (box, original)", _BOX_LABEL,
-                 join(_WST_RUNS, "qk_kmax0.6_wstgrid256_avgangles_noise0.0_Om0.15-0.45_s80.65-0.95"),
-                 "validation_pkqk_full_vs_pkqkwst_box.pdf"),
-    "box_hodfix": ("Pk+Qk+WST (box, HOD fixed)", _BOX_LABEL,
-                   join(_WST_RUNS, "qk_kmax0.6_wstgrid256_avgangles_noise0.0_Om0.15-0.45_s80.65-0.95_hodfix"),
-                   "validation_pkqk_full_vs_pkqkwst_box_hodfix.pdf"),
-    "fullrange_hodfix": ("Pk+Qk+WST (full range, HOD fixed)", _FULL_LABEL,
-                         join(_WST_RUNS, "qk_kmax0.6_wstgrid256_avgangles_noise0.0_fullrange_hodfix"),
-                         "validation_pkqk_full_vs_pkqkwst_fullrange_hodfix.pdf"),
+    "box": ("Pk+Qk+WST (box)", _BOX_LABEL,
+            join(_WST_RUNS, "qk_kmax0.6_wstgrid256_avgangles_noise0.0_Om0.15-0.45_s80.65-0.95_hodfix"),
+            "validation_pkqk_full_vs_pkqkwst_box.pdf"),
+    "fullrange": ("Pk+Qk+WST (full range)", _FULL_LABEL,
+                  join(_WST_RUNS, "qk_kmax0.6_wstgrid256_avgangles_noise0.0_fullrange_hodfix"),
+                  "validation_pkqk_full_vs_pkqkwst_fullrange.pdf"),
 }
 
 
@@ -489,7 +485,7 @@ if __name__ == "__main__":
                     "box-trained Pk+Qk+WST (row 2).",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--row2", choices=sorted(ROW2_CHOICES), default="box_hodfix",
+    parser.add_argument("--row2", choices=sorted(ROW2_CHOICES), default="box",
                         help="Which Pk+Qk+WST run goes in row 2.")
     parser.add_argument("--out", default=None,
                         help="Output path (.pdf; a .png twin is also saved). "
