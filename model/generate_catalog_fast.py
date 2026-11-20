@@ -126,8 +126,7 @@ def get_prop_pos(X_val):
 
 
 #for simid in simids[start:end]:
-if 1:
-    simid = 1441
+for simid in [66,660,1414]:
     start_time = time.time()
     param = all_param[simid]
     param = np.repeat(param[None,:], nsubox, axis=0)
@@ -156,7 +155,7 @@ if 1:
                     start_token=start_token,
                     end_token=end_token,
                     pad_token=pad_token,
-                    temperature=0.5,
+                    temperature=1.0,
                 )
 
                 # out_chunk: [B, L]

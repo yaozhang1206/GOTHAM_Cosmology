@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 import torch.optim as optim
 import pickle as pk
-from model_enc_dec_w import *
+from model_enc_dec_cos_fast import *
 from gen_func import *
 from performance import *
 import numpy as np
@@ -212,8 +212,6 @@ def train():
 
     dmo_dir = '/work/nvme/bdne/yzhang116/quijote_fields/train/'
     halo_sentence_dir = '/work/nvme/bdne/yzhang116/quijote_halos/train/'
-    dmo_dir_val = '/work/nvme/bdne/yzhang116/quijote_fields/validation/'
-    halo_sentence_dir_val = '/work/nvme/bdne/yzhang116/quijote_halos/validation/'
 
     batch_size = 2
     pipeline, n_samples_per_rank = create_dali_pipeline(
@@ -226,19 +224,7 @@ def train():
         auto_reset=True
     )
 
-    batch_size_val = 2
-    pipeline_val, n_samples_per_rank_val = create_dali_pipeline(
-        dmo_dir_val, halo_sentence_dir_val, batch_size_val, num_threads=4, device_id=local_rank,
-        shard_id=dist.get_rank(), num_shards=int(os.environ.get("WORLD_SIZE", 1)), shuffle=True)
-    dali_iterator_val = DALIGenericIterator(
-        [pipeline_val],
-        ['DM_fields', 'gal_tokens'],
-        last_batch_policy=LastBatchPolicy.DROP,
-        auto_reset=True
-    )
-
     sub_batch_size = 200
-    sub_batch_size_val = 200
     subbox_per_file = 20000
     batch_num = n_samples_per_rank // batch_size
     nsub_batches = subbox_per_file * batch_size // sub_batch_size
@@ -255,7 +241,7 @@ def train():
         return lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(math.pi * (step-warmup_steps) / (total_steps - warmup_steps)))
 
     if dist.get_rank() == 0:
-        wandb.login(key="22b8042f587b46afa3f77fa124d0a1b135bd5dd1")         
+        wandb.login()  # reads WANDB_API_KEY from the environment (or ~/.netrc)
         wandb.init(
             project='quijote',
             name='w_%s_embed%d_lrmax%e_batch%d'%(loss_type,n_embd,lr_max,sub_batch_size*Ndevices),
@@ -286,7 +272,6 @@ def train():
     # nepochs = max_iters 
         #train_log = open("/work/hdd/bdne/yzhang116/logs/train_36_%s_embed%d_batch%d_lrmin%e_lrmax%e.log"%(loss_type,n_embd,batch_size,lr_min,lr_max), "w")    
         #val_log = open("/work/hdd/bdne/yzhang116/logs/validation_36_%s_embed%d_batch%d_lrmin%e_lrmax%e.log"%(loss_type,n_embd,batch_size,lr_min,lr_max), "w")
-    best_loss = 1e20
     sub_step = 0
     for jepoch in range(0, max_iters):
         for batch_idx, batch_data in enumerate(dali_iterator):
@@ -340,126 +325,71 @@ def train():
                 #train_log.write(f"{jepoch*batch_num+batch_idx}\t{loss_mean_here:.8f}\n")
                 #train_log.flush()
                 sub_step += 1
-
-            if sub_step % (nsub_batches*5) == 0:
-                model.eval()
-                loss_mean_here = 0
-                count_val = 0
-                with torch.no_grad():
-                    for batch_idx_val, batch_data_val in enumerate(dali_iterator_val):
-                        DM_val = batch_data_val[0]['DM_fields']
-                        DM_val = torch.flatten(DM_val, start_dim=0, end_dim=1)
-                        DM_val = torch.moveaxis(DM_val, -1, 1)  # move the last dimension to the second position
-                        gal_tokens_val = batch_data_val[0]['gal_tokens']
-                        gal_tokens_val = torch.flatten(gal_tokens_val, start_dim=0, end_dim=1)
-                        B = gal_tokens_val.shape[0]
-                        X_val = gal_tokens_val[:, :-1].to(torch.long)
-                        Y_val = gal_tokens_val[:, 1:].to(torch.long)
-                        Y_val[:, :5] = pad_token
-                        mask_val = torch.logical_not(X_val != pad_token)
-                        masked_logits_val = torch.zeros(mask_val.shape, device=X_val.device, dtype=torch.float32)
-                        MASK_val = masked_logits_val.masked_fill(mask_val, float('-inf'))[:,None,:]
-                        all_inds = np.arange(B)
-                        nsub_batches_val = B // sub_batch_size_val
-                        for js in range(nsub_batches_val):
-                            ind_js = all_inds[js*sub_batch_size_val:(js+1)*sub_batch_size_val]
-                            with ctx:
-                                val_loss = model(X_val[ind_js], DM_val[ind_js], 
-                                                    maskd=MASK_val[ind_js], 
-                                                    targets=Y_val[ind_js])
-                            loss_tensor = torch.tensor(val_loss.item(), device=device)
-                            dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
-                            loss_mean_here += loss_tensor.item()
-                            count_val += 1
-
-                    loss_mean_here /= count_val
-                if dist.get_rank() == 0:
-                    wandb.log({
-                        "validation/total_loss": loss_mean_here,
-                        "validation/epoch": jepoch,
-                        }, step=sub_step)
-                    print("Validation epoch: %d step: %d Mean loss for this epoch: "%(jepoch, sub_step), loss_mean_here)
-                    #val_log.write(f"{jepoch*batch_num+batch_idx}\t{loss_mean_here:.8f}\n")
-                    #val_log.flush()
-                    # if loss is less than previous best, save the checkpoint:
-                if loss_mean_here < best_loss:
-                    best_loss = loss_mean_here
-                if loss_mean_here > best_loss + 1:
-                    print("Validation loss increased significantly, exiting training to prevent overfitting.", flush=True)
-                    exit(0)
-                if loss_mean_here < best_loss + 0.1:
+                if sub_step % 500 == 0 and sub_step > 0:
+                    model.eval()
                     if dist.get_rank() == 0:
                         checkpoint = {
                             'model': model.state_dict(),
                             'optimizer': optimizer.state_dict(),
                             'scaler': scaler.state_dict(),
                             'global_step': jepoch,
-                            'loss': best_loss,
+                            'loss': loss_mean_here,
                             'config': HaloConfig,
                         }
                         base_dir = "/work/hdd/bdne/yzhang116/checkpoints_quijote"
                         job_dir = os.path.join(base_dir, f"{job_id}")
                         os.makedirs(job_dir, exist_ok=True)
-                        check_point_name = os.path.join(job_dir, f'checkpoint_w_{loss_type}_epoch_{jepoch}_step_{sub_step}_embed_{n_embd}_batch_{sub_batch_size*Ndevices}_lrmax_{lr_max}_lrmin_{lr_min}_layer_{n_layer}_head_{n_head}_layervit_{n_layers_vit}_headvit_{n_heads_vit}_patch_{patch_size}_dropout_{dropout}.pt')
-                        torch.save(checkpoint, check_point_name)
-                        print(f"Checkpoint saved at epoch {jepoch} with loss {best_loss:.4f}: {check_point_name}", flush=True)
-
-                simids = [1414,660,66,975,1565,1625,1974,1043]
-                num_true = [140330,746524,566607,340981,691685,218454,460621,1003888]
-                world_size = dist.get_world_size()
-                simid = simids[int(dist.get_rank())]
-                start_time = time.time()
-                gen_data = gen(simid, model)
-                end_time = time.time()
-                print(f"Generation time for simid {simid} on rank {dist.get_rank()}: {(end_time-start_time)/60} mins", flush=True)
-                hmf,ps,num_infer= get_ratios(simid,gen_data) 
-                obj = {"rank": dist.get_rank(), "hmf": hmf, "pk": ps, "num_infer": num_infer}
-                dist.barrier()
-                if dist.get_rank() == 0:
-                    gathered = [None for _ in range(world_size)]
-                else:
-                    gathered = None
-                dist.gather_object(obj, gathered, dst=0)
-
-                if dist.get_rank() == 0:
-                    for obj in gathered:
-                        r = obj["rank"]
-                        hmf = obj["hmf"]
-                        ps = obj["pk"]
-                        num_infer = obj["num_infer"]
-                        log_ps[r,1] = ps[1]
-                        log_hmf[r,1] = hmf[1]
-                        log_ps[r,0] = ps[0]
-                        log_hmf[r,0] = hmf[0]
-                        print(f"Number of inferred halos: {num_infer}", flush=True)
-
-                        wandb.log(
-                            {   '''
-                                f"Statistics/PowerSpectra_GPU{r}": wandb.plot.line_series(
-                                xs=np.log10(ps[0]),
-                                ys=log_ps[r].tolist(),
-                                keys=[f"step_{sub_step - i*5000}" for i in range(5)][::-1],
-                                title=f"Power Spectrum {simids[r]}",
-                                xname="log10(k) [h/Mpc]",
-                                ),
-                                f"Statistics/HMF_GPU{r}": wandb.plot.line_series(
-                                xs=hmf[0],
-                                ys=log_hmf[r].tolist(),
-                                keys=[f"step_{sub_step - i*5000}" for i in range(5)][::-1],
-                                title=f"HMF {simids[r]}",
-                                xname="log10(M) [Msun/h]",
-                                ),
-                                '''
-                                f"Statistics/NumHalos_GPU{r}_true{num_true[r]}": num_infer,
-                            },
-                            step=sub_step,
+                        check_point_name = os.path.join(
+                            job_dir,
+                            f'checkpoint_cos_{loss_type}_epoch_{jepoch}_step_{sub_step}'
+                            f'_embed_{n_embd}_batch_{sub_batch_size * Ndevices}'
+                            f'_lrmax_{lr_max}_lrmin_{lr_min}_layer_{n_layer}_head_{n_head}'
+                            f'_layervit_{n_layers_vit}_headvit_{n_heads_vit}'
+                            f'_patch_{patch_size}_dropout_{dropout}.pt'
                         )
-                    base_dir = "/u/yzhang116/NN/plots"
-                    plot_dir = os.path.join(base_dir, f"{job_id}")
-                    os.makedirs(plot_dir, exist_ok=True)
-                    plot_name = os.path.join(plot_dir, f"performance_step_{sub_step}_{job_id}_w.png")
-                    plot_log(log_ps,log_hmf,num_true,plot_name)
-                model.train()
+                        torch.save(checkpoint, check_point_name)
+                        print(f"Checkpoint saved at epoch {jepoch} with loss {loss_mean_here:.4f}: "
+                              f"{check_point_name}", flush=True)
+
+                    simids = [1414, 660, 66, 975, 1565, 1625, 1974, 1043]
+                    num_true = [140330, 746524, 566607, 340981, 691685, 218454, 460621, 1003888]
+                    world_size = dist.get_world_size()
+                    simid = simids[int(dist.get_rank())]
+                    start_time = time.time()
+                    gen_data = gen(simid, model)
+                    end_time = time.time()
+                    print(f"Generation time for simid {simid} on rank {dist.get_rank()}: "
+                          f"{(end_time - start_time) / 60} mins", flush=True)
+                    hmf, ps, num_infer = get_ratios(simid, gen_data)
+                    obj = {"rank": dist.get_rank(), "hmf": hmf, "pk": ps, "num_infer": num_infer}
+                    dist.barrier()
+                    if dist.get_rank() == 0:
+                        gathered = [None for _ in range(world_size)]
+                    else:
+                        gathered = None
+                    dist.gather_object(obj, gathered, dst=0)
+
+                    if dist.get_rank() == 0:
+                        for obj in gathered:
+                            r = obj["rank"]
+                            hmf = obj["hmf"]
+                            ps = obj["pk"]
+                            num_infer = obj["num_infer"]
+                            log_ps[r, 1] = ps[1]
+                            log_hmf[r, 1] = hmf[1]
+                            log_ps[r, 0] = ps[0]
+                            log_hmf[r, 0] = hmf[0]
+                            print(f"Number of inferred halos: {num_infer}", flush=True)
+                            wandb.log(
+                                {f"Statistics/NumHalos_GPU{r}_true{num_true[r]}": num_infer},
+                                step=sub_step,
+                            )
+                        base_dir = "/u/yzhang116/NN/plots"
+                        plot_dir = os.path.join(base_dir, f"{job_id}")
+                        os.makedirs(plot_dir, exist_ok=True)
+                        plot_name = os.path.join(plot_dir, f"performance_step_{sub_step}_{job_id}.png")
+                        plot_log(log_ps, log_hmf, num_true, plot_name)
+                    model.train()
                         
         
     if dist.get_rank() == 0:

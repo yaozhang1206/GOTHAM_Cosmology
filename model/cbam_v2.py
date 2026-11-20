@@ -82,7 +82,7 @@ class CBAM3D(nn.Module):
         super(CBAM3D, self).__init__()
         
         self.channel_attention = ChannelAttention3D(in_channels, reduction_ratio)
-        if patch_size == 4:
+        if patch_size == 4 or patch_size == 5:
             spatial_kernel_size = 3
         elif patch_size == 6:
             spatial_kernel_size = 5
@@ -162,6 +162,21 @@ class ResBlock3D_with_CBAM(nn.Module):
             self.skip = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size=3, stride=1, bias=False, dtype=torch.bfloat16), 
             # nn.BatchNorm3d(out_channels) 
+            )
+
+        elif patch_size == 5:
+
+            self.conv1 = nn.Conv3d(in_channels, out_channels//2, kernel_size=3, stride=1, padding=0, bias=False, dtype=torch.bfloat16)#, groups=in_channels)
+            self.bn1 = nn.RMSNorm(out_channels//2)
+            self.relu1 = nn.LeakyReLU(inplace=True)
+
+            self.conv2 = nn.Conv3d(out_channels//2, out_channels, kernel_size=2, stride=1, padding=0, bias=False, dtype=torch.bfloat16)#, groups=in_channels)
+            self.bn2 = nn.RMSNorm(out_channels)
+            self.relu2 = nn.LeakyReLU(inplace=True)
+
+            self.skip = nn.Sequential(
+            nn.Conv3d(in_channels, out_channels, kernel_size=4, stride=1, bias=False, dtype=torch.bfloat16),
+            # nn.BatchNorm3d(out_channels)
             )
         
         elif patch_size == 8: # 16 -> 8 (stride 2)

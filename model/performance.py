@@ -175,7 +175,10 @@ def get_ratios(simid, gen_data, xfirst=False):
         gen_data = np.delete(gen_data, [1,2,3,4,5,6], axis=1)
         gen_data = gen_data.reshape((grid,grid,grid,-1))
         pos, prop = get_prop_pos(gen_data)
-    vel = prop[:,1:4]
+
+    print(f'Sim {simid}: get_prop_pos returned pos.shape={pos.shape}, '
+          f'prop.shape={prop.shape}, prop.dtype={prop.dtype}', flush=True)
+
     data = np.loadtxt('/work/hdd/bdne/yzhang116/quijote/halo_catalogs/halo_LH_%d.dat'%simid)
     pos_true = data[:, 1:4]
     mass     = data[:, 0]
@@ -185,9 +188,26 @@ def get_ratios(simid, gen_data, xfirst=False):
     mass = mass[index]
     num_true = mass.shape[0]
     num_infer = prop.shape[0]
+    print(f'Sim {simid}: true halos = {num_true}, inferred halos = {num_infer}')
+
+    if prop.ndim < 2 or prop.shape[0] == 0:
+        # Degenerate decode (e.g. deterministic/argmax strategies can
+        # collapse to predicting zero halos everywhere, or produce a
+        # ragged prop_infer_all if per-voxel entries come out
+        # inconsistently shaped -- see get_prop_pos()/get_prop_pos_xfirst).
+        # Report this explicitly (NaN diagnostics, num_infer as measured)
+        # instead of crashing on `prop[:,1:4]` (empty/ragged array is 1D).
+        print(f'Sim {simid}: prop array is degenerate (ndim={prop.ndim}, '
+              f'shape={prop.shape}) -- returning NaN-filled HMF/PS diagnostics '
+              f'instead of crashing.', flush=True)
+        k1, _ = power_spectrum(np.float32(pos_true))
+        return (np.array([logmass_bins[:-1], np.full(logmass_bins[:-1].shape[0], np.nan)]),
+                np.array([k1, np.full(k1.shape[0], np.nan)]),
+                num_infer)
+
+    vel = prop[:,1:4]
     pos = np.float32(pos)
     pos_true = np.float32(pos_true)
-    print(f'Sim {simid}: true halos = {num_true}, inferred halos = {num_infer}')
     hmf1 = hmf(np.power(10, prop[:,0]))
     hmf2 = hmf(mass)
     hmf_ratio = (hmf1/hmf2-1)*100

@@ -46,7 +46,6 @@ def gen(simid, model):
                     start_token=start_token,
                     end_token=end_token,
                     pad_token=pad_token,
-                    temperature=0.5,
                 )
 
                 # out_chunk: [B, L]

@@ -64,7 +64,7 @@ time srun torchrun \
     --rdzv_backend c10d \
     --rdzv_endpoint "$head_node_ip:$MASTER_PORT" \
     --rdzv-conf=timeout=6000 \
-    quijote/train.py 
+    train.py
 
 echo "Job finished at:"
 date
