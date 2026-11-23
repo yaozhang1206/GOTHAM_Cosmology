@@ -19,7 +19,7 @@ log mass, velocity (vx, vy, vz) and concentration.
 | [`model/`](model/) | The encoder–decoder model, multi-node training, and full-box catalog generation |
 | [`3Gpc/`](3Gpc/) | Fused multi-GPU DISCO-DJ + emulator pipeline that generates (3 Gpc/h)³ halo catalogs on 2 nodes × 4 GPUs. See [`3Gpc/README.md`](3Gpc/README.md) |
 | [`interpretability/`](interpretability/) | Attention maps, embeddings, logits and per-block analysis of a trained checkpoint |
-| [`inference/`](inference/) | HOD galaxy painting, summary statistics (P_ℓ, Q₀, WST), SBI with ilias, and paper Fig. 7. See [`inference/README.md`](inference/README.md) |
+| [`inference/`](inference/) | HOD galaxy painting, summary statistics (P_ℓ, Q₀, WST), SBI with ilias, and paper Figs. 7–8. See [`inference/README.md`](inference/README.md) |
 
 ## Pipeline
 
@@ -93,9 +93,8 @@ the model, so point that at `model/` when running them elsewhere.
 
 Paints galaxies onto the halo catalogs with an HOD (4000 LH cosmologies × 10
 HOD draws). It then measures P_ℓ(k), Q₀ and WST, builds the train/test
-splits, and runs NPE with ilias. See [`inference/README.md`](inference/README.md)
-for the step-by-step pipeline and a **known HOD-mismatch issue** in the WST
-rows for LH 0–1999.
+splits, runs NPE with ilias, and makes paper Figs. 7 and 8. See
+[`inference/README.md`](inference/README.md) for the step-by-step pipeline.
 
 ## Environment
 
