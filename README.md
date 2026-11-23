@@ -81,13 +81,25 @@ CIDS="663 188" sbatch job_3gpc.sbatch
 
 ### 4. Interpretability (`interpretability/`)
 
-`save_embed_logits_gen.py` dumps token, ViT-position, halo-index and
-property embeddings, per-block hidden states and logits for sim 66.
-`visualize_{self,cross}_attn_gen.py` compute self- and cross-attention maps
-averaged over sub-boxes and cosmologies; for cross-attention, encoder patches
-are ordered by local density. `plot_*.py` make the figures from the saved
-arrays. These scripts add `/u/yzhang116/NN/quijote` to `sys.path` to import
-the model, so point that at `model/` when running them elsewhere.
+The analysis scripts (GPU) run a trained checkpoint and save arrays. The
+plot scripts (CPU) then make the paper figures from those arrays, in MNRAS
+single-column style.
+
+| script | role |
+|--------|------|
+| `save_embed_logits_gen.py` | Dumps token, ViT-position, halo-index and property embeddings, per-block hidden states and logits for sim 66 (`sim66_embeddings_logits_blocks.npz`) |
+| `visualize_self_attn_gen.py` | Self-attention maps per layer and head, averaged over sub-boxes and cosmologies (`self_attn_per_layer_head_cosmo_66.npy`) |
+| `visualize_cross_attn_gen.py` | Cross-attention maps per layer and head, with encoder patches ordered by local density (`cross_attn_per_layer_head_cosmo_66_5halos.npy`) |
+| `plot_self_avg.py` | Decoder self-attention averaged over layers and heads, for the header tokens (`<START>`, cosmology, N_halo) and the first 5 halos |
+| `plot_cross_avg.py` | Cross-attention averaged over layers and heads, for the header rows and the first 3 halos against the cosmology tokens and DM-field patches |
+| `plot_logits.py idx1 idx2 idx3` | Next-token probabilities for all 8 halo properties of three samples, compared with the true tokens |
+| `plot_logits_xyzm.py [idx]` | Compact version for one sample (default `idx = 62`): x, y, z and mass for 3 halos in a 4-row panel |
+| `plot_embed.py` | Cosine similarity of the ViT positional embeddings to patch 0, shown on the 4×4×4 patch grid |
+
+Input and output paths (`/work/hdd/bdne/yzhang116/cp_visualize/`,
+`/u/yzhang116/NN/figures/visualize/results/`) are set directly in the scripts.
+The analysis scripts add `/u/yzhang116/NN/quijote` to `sys.path` to import the
+model, so point that at `model/` when running them elsewhere.
 
 ### 5. Cosmological inference (`inference/`)
 
