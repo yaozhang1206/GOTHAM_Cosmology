@@ -2,8 +2,9 @@
 Prepare WST train/test data spanning the full 4000-sim extended-HOD set (grid=256 only).
 
 Source data lives in two directories depending on isim:
-  isim 0-1999:    /u/yzhang116/NN/inference/wide_hod_ext/WST_all_noise/
-                  separate mock and truth files
+  isim 0-1999:    /u/yzhang116/NN/analyze/WST_all_noise/
+                  separate mock and truth files, written by
+                  statistics/gal_wst_ext_40000.py
   isim 2000-3999: wide_hod_ext_40000/WST_all_noise/  (mock only, grid 256 only)
 All WST is computed (on DeltaAI) from the positions written by
 gal_pos_ext_40000_{mock,truth}.py, i.e. the same LH_points_HOD_cosmo_ext_40000.txt
@@ -23,11 +24,12 @@ import sys
 
 noise = float(sys.argv[1]) if len(sys.argv) > 1 else 0.0
 
-ldir_stats_low  = '/u/yzhang116/NN/inference/wide_hod_ext/WST_all_noise/'
+ldir_stats_low  = '/u/yzhang116/NN/analyze/WST_all_noise/'   # OUT_DIR of statistics/gal_wst_ext_40000.py
 ldir_stats_high = '/work/hdd/bdne/yzhang116/quijote_galaxy/wide_hod_ext_40000/WST_all_noise/'
 pos = 'rsd'
 
-saved_idx = set(np.loadtxt("/u/yzhang116/NN/inference/quijote_saved_idx.txt", dtype=int).tolist())
+saved_idx_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'quijote_saved_idx.txt')
+saved_idx = set(np.loadtxt(saved_idx_file, dtype=int).tolist())
 
 nhod_LH_samp = 10
 grid = 256
@@ -122,8 +124,10 @@ print("theta_test:", theta_test.shape)
 print("nbar_test_mock:", nbar_test_mock.shape)
 print("nbar_test_truth:", nbar_test_truth.shape)
 
-train_path = '/u/yzhang116/NN/inference/wide_hod_ext/WST_all_noise/' + f'WST_nbar_{model}_NGP_kc34pi_40000_galnoise_{noise:.2f}_train.dill'
-test_path = '/u/yzhang116/NN/inference/wide_hod_ext/WST_all_noise/' + f'WST_nbar_{model}_NGP_kc34pi_40000_galnoise_{noise:.2f}_test.dill'
+out_dir = '/u/yzhang116/NN/inference/wide_hod_ext/WST_all_noise/'   # = WST_DATA_DIR of the sbi/ drivers
+os.makedirs(out_dir, exist_ok=True)
+train_path = out_dir + f'WST_nbar_{model}_NGP_kc34pi_40000_galnoise_{noise:.2f}_train.dill'
+test_path = out_dir + f'WST_nbar_{model}_NGP_kc34pi_40000_galnoise_{noise:.2f}_test.dill'
 
 with open(train_path, 'wb') as f:
     dill.dump(output_train, f)

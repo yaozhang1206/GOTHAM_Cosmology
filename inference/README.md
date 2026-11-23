@@ -24,9 +24,40 @@ Quijote N-body "truth" catalogs). Galaxy noise = 0.0 everywhere.
 | Pk + Bk/Qk, truth catalogs (test sims) | `gal_pk_bk_ext_40000_truth.py` | `run_pk_bk_truth_40000.slurm` | `wide_hod_ext_40000/{Pk,Bk}_all_noise/*_truth_LH_{i}.dill` |
 | RSD galaxy positions, mock LH 0–3999 | `gal_pos_ext_40000_mock.py` | `run_gal_pos_mock_40000.slurm` (args `2000 4000`; rerun with `0 2000` for LH 0–1999) | `wide_hod_ext_40000/galaxy_rsd_pos_noise/*_mock_LH_{i}.dill` |
 | RSD galaxy positions, truth (test sims) | `gal_pos_ext_40000_truth.py` | `run_gal_pos_truth_40000.slurm` | `wide_hod_ext_40000/galaxy_rsd_pos_noise/*_truth_LH_{i}.dill` |
+| WST of the RSD galaxy positions, mock + truth | `gal_wst_ext_40000.py` | — (GPU; shard with `srun`) | `WST_all_noise/WST_angular_NGP_kc34pi_galnoise_{noise}_{mock,truth}_galaxy_LH_{i}.dill` |
 
-The WST coefficients (`WST_angular_NGP_kc34pi_*`) are computed on DeltaAI
-from the galaxy positions; that code is not in this repo.
+### WST (`gal_wst_ext_40000.py`)
+
+This script computes the angular wavelet scattering transform of each galaxy
+catalog with `ScatteringOp` from
+[galactic_wavelets](https://github.com/bregaldo/galactic_wavelets). Galaxies
+are painted with NGP onto a 256³ overdensity mesh. The transform uses J = 6,
+Q = 1, k_c = 3π/4, angular width π/4, line of sight along x, and moments
+½, 1, 2. For each of the 10 HOD draws it stores `rsd_s{0,1,2}_{kind}_{ihod}_256`
+together with `theta_hod_*`, `theta_cosmo_*` and `galsum_*`.
+
+```bash
+python statistics/gal_wst_ext_40000.py both            # truth first, then mock
+srun -n 4 python statistics/gal_wst_ext_40000.py mock  # shard = SLURM_PROCID / SLURM_NTASKS
+python statistics/gal_wst_ext_40000.py mock 0 4 0.0    # explicit shard, nshards, noise
+```
+
+- **Inputs:** it processes every `Galaxy_pos_galnoise_{noise}_{kind}_LH_{i}.dill`
+  it finds in `IN_DIRS`. Those are `OUT_DIR/gal_position/` (preferred) and
+  `wide_hod_ext_40000/galaxy_rsd_pos_noise/`. The first directory wins
+  because the `/work` copies of sims duplicated there are truncated.
+- **Outputs:** written to `OUT_DIR = /u/yzhang116/NN/analyze/WST_all_noise`
+  (`/work/hdd` is near quota). Existing outputs are skipped, so you can rerun
+  the script to resume.
+- **Inputs are deleted (`DELETE_INPUTS = True`).** After each sim's output
+  is written and passes validation (it reloads cleanly with the right `isim`,
+  all keys are present, values are finite, and the s1/s2 lengths are the same
+  for every HOD), *every* copy of that sim's galaxy-position file is removed.
+  Files for sims that fail validation are kept. Set `DELETE_INPUTS = False`
+  if you still need the positions.
+- **Next step:** `split/prepare_wst_train_test_40000.py` reads isim < 2000
+  (mock + truth) from this `OUT_DIR`, and isim ≥ 2000 (mock only) from
+  `wide_hod_ext_40000/WST_all_noise/`.
 
 ## 2. `split/` — build train/test sets
 
@@ -40,7 +71,7 @@ column-wise.
 |--------|--------|
 | `prepare_pk_40000.py [noise]` | `Pk_nbar_NGP_galnoise_{noise}_200c_{train,test}.dill` |
 | `prepare_bk_40000.py [noise]` | `Bk_NGP_galnoise_{noise}_200c_{train,test}.dill` |
-| `prepare_wst_train_test_40000.py [noise]` | `WST_nbar_angular_NGP_kc34pi_40000_galnoise_{noise}_{train,test}.dill` |
+| `prepare_wst_train_test_40000.py [noise]` | `NN/inference/wide_hod_ext/WST_all_noise/WST_nbar_angular_NGP_kc34pi_40000_galnoise_{noise}_{train,test}.dill` (read by the `sbi/` drivers) |
 
 ## 3. `sbi/` — run the SBI pipeline
 
